@@ -8,8 +8,11 @@ from scipy.integrate import solve_ivp
 # Shape of house
 depth = 5 # m
 height = 3 # m
-width = 5.2 # m
-
+width = 5.1 # m
+overhang = .9 # m
+above_window = .4 # m
+window = 2.6 # m
+below_window = .2 # m
 
 # Floor Parameters
 
@@ -26,14 +29,14 @@ h_outdoor = 30 #    W / m^2 * K^-1
 
 # Wall Parameters
 wall_thickness = 0.1 # meters
-area_wall_inside = 5.1*5*2 + 0.6*5 + 3*5 + 5.1*3*2 # m^2
-area_window = 2.6 * 5 # m^2
-area_wall_outside = (5.1+2*wall_thickness) * (5 + 2*wall_thickness) \
-                    + (3+2*wall_thickness)*(5+2*wall_thickness) \
-                    + (6+2*wall_thickness)*(5+2*wall_thickness) \
-                    + (0.6+2*wall_thickness)*(5+2*wall_thickness) \
-                    + (3+2*wall_thickness)+(5.1*2*wall_thickness) \
-                    + 0.9*wall_thickness*2
+area_wall_inside = width*depth*2 + (above_window+below_window)*depth + height*depth + width*height*2 # m^2
+area_window = window * depth # m^2
+area_wall_outside = (width+2*wall_thickness) * (depth + 2*wall_thickness) \
+                    + (height+2*wall_thickness)*(depth+2*wall_thickness) \
+                    + ((width+overhang)+2*wall_thickness)*(depth+2*wall_thickness) \
+                    + ((above_window+below_window)+2*wall_thickness)*(depth+2*wall_thickness) \
+                    + (height+2*wall_thickness)+(width*2*wall_thickness) \
+                    + overhang*wall_thickness*2
 
 # Conduction coefficients
 k_fiberglass = 0.04 # W / m * K^-1
@@ -66,13 +69,13 @@ voltage_div = (r_2 + (1/(1/r_3+1/r_4)) + r_5) / (r_tot)
 
 # Find numerical solution to ODE
 days = 40
-t_span = [0,8400*days] # s
-results = solve_ivp(dTdt, t_span, [T_IN_0], t_eval = range(8400*days))
+t_span = [0,86400*days] # s
+results = solve_ivp(dTdt, t_span, [T_IN_0], t_eval = range(86400*days))
 print(results)
 print(type(results))
 
 air_temp = (results.y.T - TEMP_OUT) * voltage_div + TEMP_OUT
-plt.plot(results.t/8400, air_temp)
+plt.plot(results.t/86400, air_temp)
 plt.xlabel("Time (days)")
 plt.ylabel("Temp (C)")
 plt.title("Air Temp over time")
