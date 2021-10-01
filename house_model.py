@@ -5,14 +5,22 @@ from scipy.integrate import solve_ivp
 
 # Solar House Model for QEA 3
 
-# Shape of house
-depth = 5 # m
-height = 3 # m
-width = 5.1 # m
-overhang = .9 # m
-above_window = .4 # m
-window = 2.6 # m
-below_window = .2 # m
+# Make "houses" that we can generate and optimize
+class House:
+    def __init__(self, height, width, depth, window):    
+        # Shape of house
+        self.height = height # m
+        self.width = width # m
+        self.depth= depth # m
+        self.window = window # m
+        self.construct_house()
+
+    def construct_house(self):
+        self.overhang = self.window/(np.tan(np.adians(75)) \
+                        - np.tan(np.radians(25))) # m
+        self.above_window = self.overhang*np.tan(np.radians(25)) # m
+        self.below_window =  self.height-self.window-self.above_window # m
+
 
 # Floor Parameters
 
