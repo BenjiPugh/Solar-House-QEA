@@ -146,8 +146,9 @@ class House:
         plt.show()
 
     def eval_day(self):
-        self.day_time = self.results.t[T_0_EVAL:T_0_EVAL+SEC_DAY]/SEC_DAY*24-0
-        self.day_air_temp = self.air_temp[T_0_EVAL:T_0_EVAL+SEC_DAY]
+        self.day_time = (self.results.t[T_0_EVAL*SEC_DAY:T_0_EVAL*SEC_DAY+SEC_DAY] \
+                        /SEC_DAY*24-0)-T_0_EVAL*24
+        self.day_air_temp = self.air_temp[T_0_EVAL*SEC_DAY:T_0_EVAL*SEC_DAY+SEC_DAY]
         self.day_max = np.max(self.day_air_temp)
         self.day_min = np.min(self.day_air_temp)
         self.day_ave = np.mean(self.day_air_temp)
