@@ -5,6 +5,11 @@ from scipy.integrate import solve_ivp
 
 # Solar House Model for QEA 3
 
+# An an approximate model of the solar flux over time
+def window_flux(t):
+    flux = -361*math.cos(math.pi*t/(12*3600)) + 224*math.cos(math.pi*t/(6*3600)) + 210
+    return flux # W / m^2
+
 # Make "houses" that we can generate and optimize
 class House:
     def __init__(self, height, width, depth, window, thickness_floor, thickness_wall):    
@@ -15,6 +20,7 @@ class House:
         self.window = window # m
         self.thickness_floor = thickness_floor # m
         self.thickness_wall = thickness_wall # m
+
         self.construct_house()
         self.model_resistance()
         self.simulate_house()
@@ -39,7 +45,7 @@ class House:
         
         # Wall Parameters
         self.area_wall_inside = self.width*self.depth*2 + (self.above_window \
-                                +self.below_window)*self.depth + self.eight \
+                                +self.below_window)*self.depth + self.height \
                                 *self.depth + self.width*self.height*2 # m^2
         self.area_window = self.window * self.depth # m^2
 
@@ -69,47 +75,41 @@ class House:
 
         # Resistances
         r_1 = 1/(H_INDOOR * self.area_floor) # W/K
-        r_2 = 2/(H_INDOOR * (self.area_wall_inside + self.area_window)) # W/K
-        r_3 = self.wall_thickness/(K_FIBERGLASS * self.area_wall_inside) # W/K
-        r_4 = 1/(H_WINDOW * self.area_window) # W/K
-        r_5 = 1/(H_OUTDOOR * (self.area_wall_outside + self.area_window)) # W/K
-        self.r_tot = r_1 + 1/(1/(r_2+r_3+r_5) + 1/(r_2+r_4+r_5)) # Total resistance W/K
+        r_2 = 1/(H_INDOOR * self.area_wall_inside) # W/K
+        r_3 = 1/(H_INDOOR * self.area_window) # W/K
+        r_4 = self.thickness_wall/(K_FIBERGLASS * self.area_wall_inside) # W/K
+        r_5 = 1/(H_WINDOW * self.area_window) # W/K
+        r_6 = 1/(H_OUTDOOR * self.area_wall_outside) # W/K
+        r_7 = 1/(H_OUTDOOR * self.window) # W/K
+        self.r_tot = r_1 + 1/(1/(r_2+r_4+r_6) + 1/(r_3+r_5+r_7)) # Total resistance W/K
+        self.voltage_div = 1/(1/(r_2+r_4+r_6) + 1/(r_3+r_5+r_7))/self.r_tot
 
-    def simulate_house(self):
-        # Find the temperature of the air using a voltage divider as a model
-        voltage_div = 1/(1/(r_2+r_3+r_5) + 1/(r_2+r_4+r_5))/self.r_tot
-        self.air_temp = (results.y.T - TEMP_OUT) * voltage_div + TEMP_OUT
-
-    def dTdt(t,T_floor):
+    def dTdt(self,t,T_floor):
+        TEMP_OUT = -3 # C
         res = (window_flux(t)*self.area_window - (T_floor - TEMP_OUT)/self.r_tot)/self.capacity_floor # K/S
         return res
 
+    def simulate_house(self):
+        # Simulation Conditions
+        TEMP_OUT = -3 # C
+        T_IN_0 = 21 # C
+        DAYS = 100 # d
+        T_0_EVAL = 80 # time to stabilize d
+        T_SPAN = [0,86400*DAYS] # s
+        T_SPAN_EVAL = [86400*T_0_EVAL,86400*DAYS] # s
+        self.results = solve_ivp(self.dTdt, T_SPAN, [T_IN_0], t_eval = range(86400*DAYS))
+        self.air_temp = (self.results.y.T - TEMP_OUT) * self.voltage_div + TEMP_OUT
+        self.std = np.std(self.air_temp[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]])
+        self.avg = np.mean(self.air_temp[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]])
 
-# Initial Temperatures
-TEMP_OUT = -3 # C
-T_IN_0 = 21 # C
-
-
-# An an approximate model of the solar flux over time
-def window_flux(t):
-    flux = -361*math.cos(math.pi*t/(12*3600)) + 224*math.cos(math.pi*t/(6*3600)) + 210
-    return flux # W / m^2
-
-def dTdt(t,T_floor):
-    res = (window_flux(t)*area_window - (T_floor - TEMP_OUT)/r_tot)/capacity_floor # K/S
-    return res
-
-
-# Find numerical solution to ODE
-days = 40
-t_span = [0,86400*days] # s
-results = solve_ivp(dTdt, t_span, [T_IN_0], t_eval = range(86400*days))
-print(results)
-print(type(results))
+    def graph_house(self):
+        plt.plot(self.results.t/86400, self.air_temp)
+        plt.xlabel("Time (days)")
+        plt.ylabel("Temp (C)")
+        plt.title("Air Temp over time")
+        plt.show()
 
 
-plt.plot(results.t/86400, air_temp)
-plt.xlabel("Time (days)")
-plt.ylabel("Temp (C)")
-plt.title("Air Temp over time")
-plt.show()
+test_house = House(3,5.1,5,2.6,.3,.031)
+test_house.graph_house()
+print([test_house.std, test_house.avg])
