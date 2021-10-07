@@ -10,6 +10,41 @@ def window_flux(t):
     flux = -361*math.cos(math.pi*t/(12*3600)) + 224*math.cos(math.pi*t/(6*3600)) + 210
     return flux # W / m^2
 
+# Functions to plot min and max
+def annot_max(x,y, ax=None):
+    xmax = x[np.argmax(y)]
+    ymax = y.max()
+    text= "Maximum Temperature\nx={:.3f}, y={:.3f}".format(xmax, ymax)
+    if not ax:
+        ax=plt.gca()
+    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+    arrowprops=dict(arrowstyle="->",connectionstyle="angle,angleA=0,angleB=60")
+    kw = dict(xycoords='data',textcoords="axes fraction",
+              arrowprops=arrowprops, bbox=bbox_props, ha="right", va="top")
+    ax.annotate(text, xy=(xmax, ymax), xytext=(0.94,0.8), **kw)
+
+def annot_min(x,y, ax=None):
+    xmin = x[np.argmin(y)]
+    ymin = y.min()
+    text= "Minimum Temperature\nx={:.3f}, y={:.3f}".format(xmin, ymin)
+    if not ax:
+        ax=plt.gca()
+    bbox_props = dict(boxstyle="square,pad=0.3", fc="w", ec="k", lw=0.72)
+    arrowprops=dict(arrowstyle="->",connectionstyle="angle,angleA=0,angleB=60")
+    kw = dict(xycoords='data',textcoords="axes fraction",
+              arrowprops=arrowprops, bbox=bbox_props, ha="right", va="top")
+    ax.annotate(text, xy=(xmin, ymin), xytext=(0.94,0.2), **kw)
+
+
+# Simulation Conditions
+SEC_DAY = 86400 # s
+TEMP_OUT = -3 # C
+T_IN_0 = 21 # C
+DAYS = 100 # d
+T_0_EVAL = 80 # time to stabilize d
+T_SPAN = [0,SEC_DAY*DAYS] # s
+T_SPAN_EVAL = [SEC_DAY*T_0_EVAL,SEC_DAY*DAYS] # s
+
 # Make "houses" that we can generate and optimize
 class House:
     def __init__(self, height, width, depth, window, thickness_floor, thickness_wall):    
@@ -85,31 +120,55 @@ class House:
         self.voltage_div = 1/(1/(r_2+r_4+r_6) + 1/(r_3+r_5+r_7))/self.r_tot
 
     def dTdt(self,t,T_floor):
-        TEMP_OUT = -3 # C
-        res = (window_flux(t)*self.area_window - (T_floor - TEMP_OUT)/self.r_tot)/self.capacity_floor # K/S
+        res = (window_flux(t)*self.area_window - (T_floor - TEMP_OUT)/self.r_tot) \
+            / self.capacity_floor # K/S
         return res
 
     def simulate_house(self):
-        # Simulation Conditions
-        TEMP_OUT = -3 # C
-        T_IN_0 = 21 # C
-        DAYS = 100 # d
-        T_0_EVAL = 80 # time to stabilize d
-        T_SPAN = [0,86400*DAYS] # s
-        T_SPAN_EVAL = [86400*T_0_EVAL,86400*DAYS] # s
-        self.results = solve_ivp(self.dTdt, T_SPAN, [T_IN_0], t_eval = range(86400*DAYS))
+        self.results = solve_ivp(self.dTdt, T_SPAN, [T_IN_0], t_eval = range(SEC_DAY*DAYS))
         self.air_temp = (self.results.y.T - TEMP_OUT) * self.voltage_div + TEMP_OUT
         self.std = np.std(self.air_temp[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]])
         self.avg = np.mean(self.air_temp[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]])
 
-    def graph_house(self):
-        plt.plot(self.results.t/86400, self.air_temp)
+    def graph_simulation(self):
+        plt.plot(self.results.t/SEC_DAY, self.air_temp)
         plt.xlabel("Time (days)")
         plt.ylabel("Temp (C)")
-        plt.title("Air Temp over time")
+        plt.title("Air Temperature Over Time")
+        plt.show()
+
+    def graph_eval(self):
+        plt.plot(self.results.t[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]]/SEC_DAY \
+               , self.air_temp[T_SPAN_EVAL[0]:T_SPAN_EVAL[1]])
+        plt.xlabel("Time (s)")
+        plt.ylabel("Temp (C)")
+        plt.title("Air Temperature Over Evaluation Period")
+        plt.show()
+
+    def eval_day(self):
+        self.day_time = self.results.t[T_0_EVAL:T_0_EVAL+SEC_DAY]/SEC_DAY*24-0
+        self.day_air_temp = self.air_temp[T_0_EVAL:T_0_EVAL+SEC_DAY]
+        self.day_max = np.max(self.day_air_temp)
+        self.day_min = np.min(self.day_air_temp)
+        self.day_ave = np.mean(self.day_air_temp)
+        self.day_sd = np.std(self.day_air_temp)
+
+    def graph_day(self):
+        self.eval_day()
+        print(self.day_time)
+        plt.plot(self.day_time, self.day_air_temp)
+        # day_sd_vis = [self.day_ave+self.day_sd,self.day_ave-self.day_sd] not necessary
+        annot_max(self.day_time, self.day_air_temp)
+        annot_min(self.day_time, self.day_air_temp)
+        plt.axhline(self.day_ave,color="r",linestyle="--")
+        kw = dict(xycoords='data',textcoords="axes fraction",ha="left", va="top")
+        plt.annotate("Average Temperature", xy=(12, self.day_ave), xytext=(0.02,0.55), **kw)
+        plt.xlabel("Time (Hours)")
+        plt.ylabel("Temp (C)")
+        plt.title("Air Temperature For One Day")
         plt.show()
 
 
 test_house = House(3,5.1,5,2.6,.3,.031)
-test_house.graph_house()
+test_house.graph_day()
 print([test_house.std, test_house.avg])
